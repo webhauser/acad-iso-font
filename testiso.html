@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Display AutoCAD SHP font</title>
+<style>body, html { margin:0; padding:0; border:0; height:100%; overflow:hidden}
+#can {width: 100%; height: 100%; display: block}
+</style>
+<script src="ISO3098B.js"></script><!--//
+<script src="standard.js"></script>	
+<script src="romans.js"></script>//-->
+</head>
+<body>
+<canvas id="can"></canvas>
+<script>
+var S=4;	// radius scale can be changed
+var Color = "black";
+const  Q = 1.0 / Math.sqrt(2);		// Do not modify
+const cx = [-1,-Q,0,Q,1,Q,0,-Q];
+const cy = [0,-Q,-1,-Q,0,Q,1,Q];
+const ex = [1,Q,0,-Q,-1,-Q,0,Q];
+const ey = [0,Q,1,Q,0,-Q,-1,-Q];
+const dx = [2,2,2,1,0,-1,-2,-2,-2,-2,-2,-1,0,1,2,2];	// 12: 0
+const dy = [0,1,2,2,2,2,2,1,0,-1,-2,-2,-2,-2,-2,-1];
+var px = [];
+var py = [];
+var x,y;
+var counter;
+var debug;
+var xsize, ysize;
+var x0,y0;
+var Ch_ys;
+var unicode;
+////////////////////////////////////////
+var can = document.getElementById("can");
+var ctx = can.getContext("2d");
+ctx.canvas.width  = window.innerWidth;
+ctx.canvas.height = window.innerHeight;
+ctx.fillStyle = "Green";
+ctx.fillRect(10, 10, 100, 100);
+ctx.lineWidth = "1";
+ctx.strokeStyle = Color;
+ctx.font = "10px Arial";
+xsize = ctx.canvas.width;
+ysize = ctx.canvas.height;
+
+function arc(cx,cy,r,a1,a2,ccw) {
+	ctx.strokeStyle=Color;
+	ctx.beginPath();
+	ctx.arc(cx,ctx.canvas.height-cy,r,2*Math.PI-a1,2*Math.PI-a2,ccw);
+	ctx.stroke();
+}
+
+function circle(cx,cy,r,col) {
+if(!debug) return;
+	ctx.strokeStyle=col;
+	ctx.beginPath();
+	ctx.arc(cx,ctx.canvas.height-cy,r,0,2*Math.PI);
+	ctx.closePath();	
+	ctx.stroke();
+}
+
+function dot(cx,cy,col) {
+if(!debug) return;
+	ctx.beginPath();
+	ctx.arc(cx,ctx.canvas.height-cy,4,0,2*Math.PI);
+	ctx.closePath();
+	ctx.fillStyle = col;
+	ctx.fill();
+	ctx.fillStyle = "black";
+	ctx.fillText(counter++,cx+5,ctx.canvas.height-cy-5);
+}
+
+function line(x1,y1,x2,y2,col) {
+if(!debug) return;
+	ctx.strokeStyle=col;
+	segment(x1,y1,false);
+	segment(x2,y2,true);
+	ctx.strokeStyle=Color;	// original color
+}
+
+function fok(rad) {
+	return 180.0 * rad / Math.PI
+}
+
+function rad(ang) {
+	return ang * Math.PI / 180.0;
+}
+
+function quad(dx,dy) {
+	if(dx>=0) return dy>=0 ? 0 : 3;
+	return y>=0 ? 1 : 2;
+}
+
+function getarc(dx,dy) {
+	var a;
+	if(dx==0) return dy>0 ? Math.PI/2.0 : 3.0*Math.PI/2.0;
+	a=Math.atan(dy/dx);
+	switch(quad(dx,dy)) {
+		case 0: case 3:
+			if(a<0) a+=2.0*Math.PI;
+			break;
+		case 1: case 2:
+			a += Math.PI;
+			break;
+	}
+	return a;
+}
+
+function segment(xx,yy,pen) {
+	yy=ctx.canvas.height-yy;
+	if(pen) {		
+		ctx.lineTo(xx,yy);
+		ctx.stroke();
+	} 
+	else ctx.moveTo(xx,yy);
+}
+
+function next(px,py,pen,rel) {
+	if(!rel) {
+		x=px;
+		y=py;
+	} else {
+		x+=px;
+		y+=py;
+	}
+	segment(x,y,pen);
+}
+
+/*
+s = starting octant  0-7
+c = number of octans 0-7
+*/
+function oarc(r,s,c,ccw) {
+var a1,a2, b;
+var ox=x+cx[s]*r;
+var oy=y+cy[s]*r;
+var a1=rad(s*45);
+	if(c!=0) {
+		b=(ccw ? s+c : s-c+8)%8;
+		a2=rad(b*45);
+	} 
+	else a2=a1+2*Math.PI;
+	arc(ox,oy,r,a1,a2,ccw);	
+	if(c!=0)
+		next(ox+ex[b]*r, oy+ey[b]*r, false);
+}
+
+function barc(dx,dy,b) {
+var H,D,R,a1,a2, ccw, draw_last;
+var cx,cy,mx,my,nx,ny;
+var p2x=x+dx,p2y=y+dy;
+
+	console.log('barc')
+	dot(x,y,'black');
+	if(b!=0) {
+		draw_last=false;
+		// calc normalized perpendicular to the displacement	
+		D=Math.sqrt(dx*dx+dy*dy);		
+		nx=dy/D;
+		ny=dx/D;		
+		if(b<0) {
+			b=-b; 
+			ny=-ny;
+			ccw=false;			
+		} 
+		else {
+			nx=-nx;
+			ccw=true;			
+		}
+		
+		// calc distances from bulge
+		b/=127;
+		D=D/2;
+		H=D*b;
+		R=D*(b*b+1)/(2*b);	//R=(D*D+H*H)/(2*H);
+
+		// calc circle origin
+		mx=x+dx/2;
+		my=y+dy/2;		
+		cx=mx+nx*(R-H);
+		cy=my+ny*(R-H);
+
+		line(cx,cy,x,y,"#00FF00");
+		line(cx,cy,p2x,p2y,"#00FF00");
+		dot(cx,cy,"#FF0000");
+		circle(cx,cy,R,"#CCCCCC");
+		
+		// get arc start,end
+		a1=getarc(x-cx,y-cy);
+		a2=getarc(p2x-cx,p2y-cy);
+		arc(cx,cy,R,a1,a2,ccw);
+		
+		if(debug) {
+			console.log('%d.=====================',counter);
+			console.log('b=',b);
+			console.log('fok=',fok(Math.atan(b)));
+			console.log('dx=%d dy=%d',dx,dy);
+			console.log('D=%.4f S=%.4f R=%.4f',D,H,R);
+			console.log('ccw',ccw);
+			console.log('a1=%.2f a2=%.2f',fok(a1),fok(a2));
+			console.log('b1=%.2f b2=%.2f',fok(b1),fok(b2));
+		}
+	}
+	else draw_last=true;
+	dot(p2x,p2y,"black");
+	line(x,y,p2x,p2y,"blue");
+	next(p2x,p2y,draw_last);
+}
+
+function farc(start_offset, end_offset, high_radius, radius, code) {
+	console.error('fractional arc');
+}
+
+function chr(rec) {
+	var i,j,k;
+	var a,b,c,d,n,r;
+	var draw,ccw,vertical=false;
+	if(!rec) return false;
+	i=0;counter=1;
+	do {
+		n=rec.arr[i++];
+		c=n & 15;
+		d=n >> 4;
+		if(d!=0) {
+			a=S*d;
+			next(a*dx[c], a*dy[c], draw, true);	// relative
+		}
+		else {			
+			switch(c) {
+				case 0: break;
+				case 1: draw=true; break;
+				case 2: draw=false; break;
+				case 3:
+					S/=rec.arr[i++];
+					break;
+				case 4:
+					S*=rec.arr[i++];
+					break;
+				case 5:
+					px.push(x);
+					py.push(y);
+					break;
+				case 6:
+					a=px.pop();
+					b=py.pop();
+					next(a,b,false);
+					break;
+				case 7:	// subshape
+					ch(rec.arr[i++]);
+					break;
+				case 8: // disp
+					if(vertical) {
+						vertical=false;
+						i+=2;
+					}
+					else {
+						a=S*rec.arr[i++];
+						b=S*rec.arr[i++];
+						next(a,b,draw,true);	// relative
+					}					
+					break;
+				case 9: // multi disp
+					do {
+						a=rec.arr[i++];
+						b=rec.arr[i++];
+						if(a!=0||b!=0)
+							next(S*a, S*b, draw, true);	// relative
+					} while(a!=0||b!=0);
+					break;
+				case 10: // Octant Arc
+					r=rec.arr[i++];
+					n=rec.arr[i++];
+					if(n<0) {
+						ccw=false;
+						n=-n;
+					} else ccw=true;
+					oarc(S*r,n>>4,n&15,ccw);
+					break;
+				case 11: // Fractional Arc
+					a=rec.arr[i++];
+					b=rec.arr[i++];
+					c=rec.arr[i++];
+					d=rec.arr[i++];
+					n=rec.arr[i++];
+					farc(a,b,c,d,n);
+					break;
+				case 12: // Bulge Arc
+					a=rec.arr[i++];
+					b=rec.arr[i++];
+					d=rec.arr[i++];					
+					barc(S*a,S*b,d);
+					break;
+				case 13: // Poly Arc
+					console.log('parc');
+					j=0;
+					k=1;					
+					do {
+						//debug=(j==k);	
+						a=rec.arr[i++];
+						b=rec.arr[i++];
+						if(a!=0||b!=0) {
+							d=rec.arr[i++];
+							barc(S*a,S*b,d);
+						}
+						++j;
+					} while(a!=0||b!=0);
+					break;
+				case 14:
+					vertical=true;
+					break;
+			}
+		}
+	} while(i<rec.arr.length);
+	return true;
+}
+
+function unid(asc) {
+	var hex = asc.toString(16).toUpperCase();
+	var pad = "";
+	for(let i=0; i<5-hex.length; i++) pad+="0";
+	return pad+hex;
+}
+
+function ch(asc) {
+var id;
+	if(unicode) id=unid(asc); else id="ch"+asc;
+	if(!chr(font[id])) {
+		console.error('ch(%d) : %s', asc, id);
+	}
+}
+
+function text(xp,yp,str) {
+	next(xp,yp,false);
+	for(let i=0; i<str.length; i++)
+		ch(str.charCodeAt(i));
+}
+
+function lf() {
+	ch(10);	// line feed \n	
+	next(x0,y,false);
+}
+
+function test() {
+	next(x0,y0,false);
+	for(const c in font) {
+		if(c!="ch0" && c!="00000") {
+			chr(font[c]);
+			if(x>=xsize-100) 
+				lf();
+		
+		}
+	}
+}
+
+function init() {
+	const id0=Object.keys(font)[0];
+	unicode=(id0=="00000");
+	Ch_ys=(font[id0].arr[0]+font[id0].arr[1])*S;	
+	x0=10;y0=ysize;
+}
+
+init();
+test();
+
+Color = "blue";
+ctx.strokeStyle = "blue";
+ctx.lineWidth = "3";
+
+y0=Ch_ys/3;
+text(x0,y0,font[Object.keys(font)[0]].id);y0+=Ch_ys;
+text(x0,y0,"abcdefghijklm");y0+=Ch_ys;
+text(x0,y0,"nopqrstuvwxyz");y0+=Ch_ys;
+text(x0,y0,"NOPQRSTUVWXYZ");y0+=Ch_ys;
+text(x0,y0,"ABCDEFGHIJKLM");y0+=Ch_ys;
+text(x0,y0,"0123456789");y0+=Ch_ys;
+</script>
+</body>
+</html>
